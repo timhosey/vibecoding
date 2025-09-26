@@ -3,6 +3,7 @@ class MusicVisualizerApp {
         this.audioAnalyzer = new AudioAnalyzer();
         this.visualizer = null;
         this.isPlaying = false;
+        this.isDragging = false;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -23,6 +24,13 @@ class MusicVisualizerApp {
         this.midLevel = document.getElementById('midLevel');
         this.trebleLevel = document.getElementById('trebleLevel');
         this.canvas = document.getElementById('visualizer');
+        
+        // Progress bar elements
+        this.currentTimeDisplay = document.getElementById('currentTime');
+        this.totalTimeDisplay = document.getElementById('totalTime');
+        this.progressBar = document.getElementById('progressBar');
+        this.progressFill = document.getElementById('progressFill');
+        this.progressHandle = document.getElementById('progressHandle');
     }
 
     initializeVisualizer() {
@@ -49,11 +57,19 @@ class MusicVisualizerApp {
         // Color mode change
         this.colorModeSelect.addEventListener('change', () => this.updateColorMode());
         
+        // Progress bar events
+        this.progressBar.addEventListener('click', (e) => this.handleProgressClick(e));
+        this.progressHandle.addEventListener('mousedown', (e) => this.startDragging(e));
+        
         // Window resize
         window.addEventListener('resize', () => this.handleResize());
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+        
+        // Mouse events for dragging
+        document.addEventListener('mousemove', (e) => this.handleDrag(e));
+        document.addEventListener('mouseup', (e) => this.stopDragging(e));
     }
 
     async handleFileSelect(event) {
@@ -68,6 +84,18 @@ class MusicVisualizerApp {
             this.trackDuration.textContent = `Duration: ${this.formatTime(this.audioAnalyzer.getDuration())}`;
             this.updatePlayPauseButton(false);
             this.showLoading(false);
+            
+            // Debug: Log frequency ranges
+            const ranges = this.audioAnalyzer.getFrequencyRanges();
+            if (ranges) {
+                console.log('Frequency Analysis Setup:');
+                console.log(`Sample Rate: ${ranges.sampleRate}Hz`);
+                console.log(`Bin Count: ${ranges.binCount}`);
+                console.log(`Bin Size: ${ranges.binSize.toFixed(1)}Hz per bin`);
+                console.log(`Bass: ${ranges.bass.start.toFixed(1)}Hz - ${ranges.bass.end.toFixed(1)}Hz`);
+                console.log(`Mid: ${ranges.mid.start.toFixed(1)}Hz - ${ranges.mid.end.toFixed(1)}Hz`);
+                console.log(`Treble: ${ranges.treble.start.toFixed(1)}Hz - ${ranges.treble.end.toFixed(1)}Hz`);
+            }
         } catch (error) {
             console.error('Error loading audio:', error);
             alert('Error loading audio file. Please try a different file.');
@@ -132,6 +160,9 @@ class MusicVisualizerApp {
             this.midLevel.textContent = Math.round(bands.mid);
             this.trebleLevel.textContent = Math.round(bands.treble);
             
+            // Update progress display
+            this.updateProgressDisplay();
+            
             requestAnimationFrame(updateInfo);
         };
         updateInfo();
@@ -175,6 +206,65 @@ class MusicVisualizerApp {
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = Math.floor(seconds % 60);
         return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    handleProgressClick(event) {
+        if (!this.audioAnalyzer.isAudioLoaded()) return;
+        
+        const rect = this.progressBar.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const progress = clickX / rect.width;
+        const duration = this.audioAnalyzer.getDuration();
+        const seekTime = progress * duration;
+        
+        this.audioAnalyzer.seekTo(seekTime);
+        this.updateProgressDisplay();
+    }
+
+    startDragging(event) {
+        if (!this.audioAnalyzer.isAudioLoaded()) return;
+        
+        event.preventDefault();
+        this.isDragging = true;
+        this.progressHandle.style.cursor = 'grabbing';
+    }
+
+    handleDrag(event) {
+        if (!this.isDragging || !this.audioAnalyzer.isAudioLoaded()) return;
+        
+        event.preventDefault();
+        const rect = this.progressBar.getBoundingClientRect();
+        const dragX = event.clientX - rect.left;
+        const progress = Math.max(0, Math.min(1, dragX / rect.width));
+        const duration = this.audioAnalyzer.getDuration();
+        const seekTime = progress * duration;
+        
+        this.audioAnalyzer.seekTo(seekTime);
+        this.updateProgressDisplay();
+    }
+
+    stopDragging(event) {
+        if (!this.isDragging) return;
+        
+        this.isDragging = false;
+        this.progressHandle.style.cursor = 'grab';
+    }
+
+    updateProgressDisplay() {
+        if (!this.audioAnalyzer.isAudioLoaded()) return;
+        
+        const currentTime = this.audioAnalyzer.getCurrentTime();
+        const duration = this.audioAnalyzer.getDuration();
+        const progress = this.audioAnalyzer.getProgress();
+        
+        // Update time displays
+        this.currentTimeDisplay.textContent = this.formatTime(currentTime);
+        this.totalTimeDisplay.textContent = this.formatTime(duration);
+        
+        // Update progress bar
+        const progressPercent = progress * 100;
+        this.progressFill.style.width = `${progressPercent}%`;
+        this.progressHandle.style.left = `${progressPercent}%`;
     }
 }
 

@@ -30,6 +30,19 @@
                 </div>
             </div>
 
+            <div class="progress-container">
+                <div class="time-display">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalTime">0:00</span>
+                </div>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-track" id="progressTrack">
+                        <div class="progress-fill" id="progressFill"></div>
+                        <div class="progress-handle" id="progressHandle"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="visualization-controls">
                 <label for="vizMode">Visualization Mode:</label>
                 <select id="vizMode">
@@ -38,6 +51,10 @@
                     <option value="wave">Wave Form</option>
                     <option value="circle">Circular Spectrum</option>
                     <option value="matrix">Matrix Rain</option>
+                    <option value="cube3d">3D Rotating Cube</option>
+                    <option value="kaleidoscope">Kaleidoscope</option>
+                    <option value="ripples">Water Ripples</option>
+                    <option value="spectrogram">Spectrogram</option>
                 </select>
                 
                 <div class="color-controls">

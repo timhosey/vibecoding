@@ -9,13 +9,19 @@ class AudioAnalyzer {
         this.isPaused = false;
         this.startTime = 0;
         this.pauseTime = 0;
+        this.currentTime = 0;
+        this.seekTime = 0;
         this.frequencyData = null;
         this.timeDomainData = null;
         
-        // Frequency bands
-        this.bassRange = { start: 0, end: 8 };
-        this.midRange = { start: 8, end: 32 };
-        this.trebleRange = { start: 32, end: 64 };
+        // Frequency bands (based on 44.1kHz sample rate, 256 FFT size)
+        // Each bin = ~344Hz (44100/128)
+        // Bass: 20Hz - 300Hz (bins 0-1)
+        // Mid: 300Hz - 3kHz (bins 2-8) 
+        // Treble: 3kHz - 22kHz (bins 9-127)
+        this.bassRange = { start: 0, end: 2 };
+        this.midRange = { start: 2, end: 9 };
+        this.trebleRange = { start: 9, end: 128 };
         
         this.initAudioContext();
     }
@@ -86,11 +92,11 @@ class AudioAnalyzer {
                 this.audioContext.resume();
             }
             
-            // Calculate offset for resume
-            const offset = this.isPaused ? this.pauseTime : 0;
+            // Calculate offset for resume or seek
+            const offset = this.isPaused ? this.pauseTime : this.seekTime;
             
-            // If we're resuming from pause, create a new source
-            if (this.isPaused) {
+            // If we're resuming from pause or seeking, create a new source
+            if (this.isPaused || this.seekTime > 0) {
                 this.setupAnalyser();
                 this.isPaused = false;
             }
@@ -98,6 +104,7 @@ class AudioAnalyzer {
             this.source.start(0, offset);
             this.isPlaying = true;
             this.startTime = this.audioContext.currentTime - offset;
+            this.seekTime = 0; // Reset seek time after starting
         } catch (error) {
             console.error('Error playing audio:', error);
         }
@@ -113,6 +120,8 @@ class AudioAnalyzer {
             this.isPlaying = false;
             this.isPaused = false;
             this.pauseTime = 0;
+            this.seekTime = 0;
+            this.currentTime = 0;
             this.setupAnalyser(); // Reset for next play
         } catch (error) {
             console.error('Error stopping audio:', error);
@@ -125,6 +134,7 @@ class AudioAnalyzer {
         try {
             this.source.stop();
             this.pauseTime = this.audioContext.currentTime - this.startTime;
+            this.currentTime = this.pauseTime;
             this.isPlaying = false;
             this.isPaused = true;
         } catch (error) {
@@ -203,7 +213,40 @@ class AudioAnalyzer {
     }
 
     getCurrentTime() {
-        return this.audioContext ? this.audioContext.currentTime : 0;
+        if (this.isPlaying) {
+            return this.audioContext.currentTime - this.startTime;
+        } else if (this.isPaused) {
+            return this.pauseTime;
+        }
+        return this.currentTime;
+    }
+
+    seekTo(timeInSeconds) {
+        if (!this.audioBuffer) return;
+        
+        // Clamp to valid range
+        const duration = this.audioBuffer.duration;
+        timeInSeconds = Math.max(0, Math.min(timeInSeconds, duration));
+        
+        this.seekTime = timeInSeconds;
+        this.currentTime = timeInSeconds;
+        
+        // If currently playing, restart from new position
+        if (this.isPlaying) {
+            this.source.stop();
+            this.setupAnalyser();
+            this.source.start(0, timeInSeconds);
+            this.startTime = this.audioContext.currentTime - timeInSeconds;
+        } else if (this.isPaused) {
+            this.pauseTime = timeInSeconds;
+        }
+    }
+
+    getProgress() {
+        if (!this.audioBuffer) return 0;
+        const duration = this.audioBuffer.duration;
+        const current = this.getCurrentTime();
+        return duration > 0 ? current / duration : 0;
     }
 
     isAudioLoaded() {
@@ -212,5 +255,31 @@ class AudioAnalyzer {
 
     getBufferLength() {
         return this.analyser ? this.analyser.frequencyBinCount : 0;
+    }
+
+    getFrequencyRanges() {
+        if (!this.audioContext) return null;
+        
+        const sampleRate = this.audioContext.sampleRate;
+        const binCount = this.getBufferLength();
+        const binSize = sampleRate / (binCount * 2);
+        
+        return {
+            sampleRate,
+            binCount,
+            binSize,
+            bass: {
+                start: this.bassRange.start * binSize,
+                end: this.bassRange.end * binSize
+            },
+            mid: {
+                start: this.midRange.start * binSize,
+                end: this.midRange.end * binSize
+            },
+            treble: {
+                start: this.trebleRange.start * binSize,
+                end: this.trebleRange.end * binSize
+            }
+        };
     }
 }

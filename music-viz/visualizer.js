@@ -8,6 +8,21 @@ class MusicVisualizer {
         this.matrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()_+-=[]{}|;:,.<>?';
         this.matrixDrops = [];
         
+        // 3D Cube properties
+        this.cubeRotation = { x: 0, y: 0, z: 0 };
+        
+        // Kaleidoscope properties
+        this.kaleidoscopeSegments = 8;
+        this.kaleidoscopePattern = [];
+        
+        // Water ripples properties
+        this.ripples = [];
+        this.rippleDamping = 0.98;
+        
+        // Spectrogram properties
+        this.spectrogramData = [];
+        this.spectrogramHistory = 100;
+        
         this.resizeCanvas();
         this.initMatrix();
         this.initParticles();
@@ -239,6 +254,243 @@ class MusicVisualizer {
         }
     }
 
+    draw3DCube(frequencyData, colorMode) {
+        const rect = this.canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const size = Math.min(rect.width, rect.height) * 0.3;
+        
+        // Get audio intensity for rotation speed
+        const bass = this.audioAnalyzer.getFrequencyBands().bass;
+        const mid = this.audioAnalyzer.getFrequencyBands().mid;
+        const treble = this.audioAnalyzer.getFrequencyBands().treble;
+        
+        // Update rotation based on audio
+        this.cubeRotation.x += (bass / 100) * 0.02;
+        this.cubeRotation.y += (mid / 100) * 0.03;
+        this.cubeRotation.z += (treble / 100) * 0.01;
+        
+        // Define cube vertices
+        const vertices = [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
+        ];
+        
+        // Project 3D points to 2D
+        const projected = vertices.map(vertex => {
+            const [x, y, z] = vertex;
+            
+            // Apply rotations
+            let rotatedX = x;
+            let rotatedY = y;
+            let rotatedZ = z;
+            
+            // Rotate around X axis
+            const cosX = Math.cos(this.cubeRotation.x);
+            const sinX = Math.sin(this.cubeRotation.x);
+            const newY = rotatedY * cosX - rotatedZ * sinX;
+            const newZ = rotatedY * sinX + rotatedZ * cosX;
+            rotatedY = newY;
+            rotatedZ = newZ;
+            
+            // Rotate around Y axis
+            const cosY = Math.cos(this.cubeRotation.y);
+            const sinY = Math.sin(this.cubeRotation.y);
+            const newX = rotatedX * cosY + rotatedZ * sinY;
+            const newZ2 = -rotatedX * sinY + rotatedZ * cosY;
+            rotatedX = newX;
+            rotatedZ = newZ2;
+            
+            // Rotate around Z axis
+            const cosZ = Math.cos(this.cubeRotation.z);
+            const sinZ = Math.sin(this.cubeRotation.z);
+            const newX2 = rotatedX * cosZ - rotatedY * sinZ;
+            const newY2 = rotatedX * sinZ + rotatedY * cosZ;
+            rotatedX = newX2;
+            rotatedY = newY2;
+            
+            // Project to 2D
+            const scale = 200 / (200 + rotatedZ * 100);
+            const projX = rotatedX * scale * size + centerX;
+            const projY = rotatedY * scale * size + centerY;
+            
+            return { x: projX, y: projY, z: rotatedZ };
+        });
+        
+        // Define cube faces
+        const faces = [
+            [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4],
+            [2, 3, 7, 6], [0, 3, 7, 4], [1, 2, 6, 5]
+        ];
+        
+        // Draw faces
+        faces.forEach((face, index) => {
+            const points = face.map(i => projected[i]);
+            
+            // Calculate face color based on audio
+            const intensity = index < 2 ? bass : index < 4 ? mid : treble;
+            const color = this.getColor(colorMode, intensity, index);
+            
+            this.ctx.fillStyle = color;
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                this.ctx.lineTo(points[i].x, points[i].y);
+            }
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.stroke();
+        });
+    }
+
+    drawKaleidoscope(frequencyData, colorMode) {
+        const rect = this.canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const radius = Math.min(rect.width, rect.height) * 0.4;
+        
+        // Get audio data for pattern generation
+        const bass = this.audioAnalyzer.getFrequencyBands().bass;
+        const mid = this.audioAnalyzer.getFrequencyBands().mid;
+        const treble = this.audioAnalyzer.getFrequencyBands().treble;
+        
+        // Update pattern based on audio
+        this.kaleidoscopePattern = [];
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            const distance = (frequencyData[i] / 255) * radius * 0.8;
+            const x = Math.cos(angle) * distance;
+            const y = Math.sin(angle) * distance;
+            this.kaleidoscopePattern.push({ x, y, intensity: frequencyData[i] });
+        }
+        
+        // Draw kaleidoscope segments
+        for (let segment = 0; segment < this.kaleidoscopeSegments; segment++) {
+            const segmentAngle = (Math.PI * 2) / this.kaleidoscopeSegments;
+            const startAngle = segment * segmentAngle;
+            const endAngle = (segment + 1) * segmentAngle;
+            
+            this.ctx.save();
+            this.ctx.translate(centerX, centerY);
+            this.ctx.rotate(startAngle);
+            
+            // Draw pattern in this segment
+            this.kaleidoscopePattern.forEach((point, index) => {
+                const intensity = point.intensity;
+                const color = this.getColor(colorMode, intensity, index + segment);
+                
+                this.ctx.fillStyle = color;
+                this.ctx.globalAlpha = intensity / 255;
+                
+                // Draw mirrored points
+                this.ctx.beginPath();
+                this.ctx.arc(point.x, point.y, 3 + (intensity / 255) * 5, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Mirror across the segment boundary
+                this.ctx.beginPath();
+                this.ctx.arc(point.x, -point.y, 3 + (intensity / 255) * 5, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+            
+            this.ctx.restore();
+        }
+        
+        this.ctx.globalAlpha = 1;
+    }
+
+    drawWaterRipples(frequencyData, colorMode) {
+        const rect = this.canvas.getBoundingClientRect();
+        
+        // Add new ripples based on audio intensity
+        const bass = this.audioAnalyzer.getFrequencyBands().bass;
+        const mid = this.audioAnalyzer.getFrequencyBands().mid;
+        const treble = this.audioAnalyzer.getFrequencyBands().treble;
+        
+        if (bass > 30) {
+            this.ripples.push({
+                x: Math.random() * rect.width,
+                y: Math.random() * rect.height,
+                radius: 0,
+                maxRadius: 100 + (bass / 100) * 200,
+                intensity: bass / 100,
+                life: 1.0
+            });
+        }
+        
+        if (mid > 40) {
+            this.ripples.push({
+                x: Math.random() * rect.width,
+                y: Math.random() * rect.height,
+                radius: 0,
+                maxRadius: 80 + (mid / 100) * 150,
+                intensity: mid / 100,
+                life: 1.0
+            });
+        }
+        
+        // Update and draw ripples
+        this.ripples = this.ripples.filter(ripple => {
+            ripple.radius += 2;
+            ripple.life -= 0.01;
+            
+            if (ripple.radius > ripple.maxRadius || ripple.life <= 0) {
+                return false;
+            }
+            
+            // Draw ripple
+            const alpha = ripple.life * ripple.intensity;
+            const color = this.getColor(colorMode, ripple.intensity * 100, Math.floor(ripple.radius / 10));
+            
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2;
+            this.ctx.globalAlpha = alpha;
+            
+            this.ctx.beginPath();
+            this.ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            return true;
+        });
+        
+        this.ctx.globalAlpha = 1;
+    }
+
+    drawSpectrogram(frequencyData, colorMode) {
+        const rect = this.canvas.getBoundingClientRect();
+        
+        // Add current frequency data to history
+        this.spectrogramData.unshift([...frequencyData]);
+        
+        // Keep only recent history
+        if (this.spectrogramData.length > this.spectrogramHistory) {
+            this.spectrogramData.pop();
+        }
+        
+        // Draw spectrogram
+        const cellWidth = rect.width / frequencyData.length;
+        const cellHeight = rect.height / this.spectrogramData.length;
+        
+        for (let time = 0; time < this.spectrogramData.length; time++) {
+            const timeData = this.spectrogramData[time];
+            for (let freq = 0; freq < timeData.length; freq++) {
+                const intensity = timeData[freq];
+                const color = this.getColor(colorMode, intensity, freq);
+                
+                this.ctx.fillStyle = color;
+                this.ctx.fillRect(
+                    freq * cellWidth,
+                    time * cellHeight,
+                    cellWidth,
+                    cellHeight
+                );
+            }
+        }
+    }
+
     animate() {
         const rect = this.canvas.getBoundingClientRect();
         this.ctx.clearRect(0, 0, rect.width, rect.height);
@@ -281,6 +533,18 @@ class MusicVisualizer {
                 break;
             case 'matrix':
                 this.drawMatrixRain(frequencyData, colorMode);
+                break;
+            case 'cube3d':
+                this.draw3DCube(frequencyData, colorMode);
+                break;
+            case 'kaleidoscope':
+                this.drawKaleidoscope(frequencyData, colorMode);
+                break;
+            case 'ripples':
+                this.drawWaterRipples(frequencyData, colorMode);
+                break;
+            case 'spectrogram':
+                this.drawSpectrogram(frequencyData, colorMode);
                 break;
         }
         
