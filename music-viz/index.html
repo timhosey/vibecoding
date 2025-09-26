@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 Music Viz 🎵</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Music Viz 🎵</h1>
+            <p>Drop into the vibes with real-time audio visualization</p>
+        </header>
+
+        <div class="controls">
+            <div class="file-input-container">
+                <input type="file" id="audioFile" accept="audio/*" />
+                <label for="audioFile" class="file-input-label">
+                    📁 Choose Music File
+                </label>
+            </div>
+            
+            <div class="audio-controls">
+                <button id="playPause" class="control-btn">▶️ Play</button>
+                <button id="stop" class="control-btn">⏹️ Stop</button>
+                <div class="volume-control">
+                    <label for="volume">🔊 Volume:</label>
+                    <input type="range" id="volume" min="0" max="100" value="70">
+                </div>
+            </div>
+
+            <div class="visualization-controls">
+                <label for="vizMode">Visualization Mode:</label>
+                <select id="vizMode">
+                    <option value="bars">Frequency Bars</option>
+                    <option value="particles">Particle System</option>
+                    <option value="wave">Wave Form</option>
+                    <option value="circle">Circular Spectrum</option>
+                    <option value="matrix">Matrix Rain</option>
+                </select>
+                
+                <div class="color-controls">
+                    <label for="colorMode">Color Scheme:</label>
+                    <select id="colorMode">
+                        <option value="rainbow">Rainbow</option>
+                        <option value="neon">Neon</option>
+                        <option value="fire">Fire</option>
+                        <option value="ocean">Ocean</option>
+                        <option value="monochrome">Monochrome</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="visualizer-container">
+            <canvas id="visualizer" width="1200" height="600"></canvas>
+            <div class="loading" id="loading">Loading audio...</div>
+        </div>
+
+        <div class="info-panel">
+            <div class="track-info">
+                <h3>Track Info</h3>
+                <p id="trackName">No track loaded</p>
+                <p id="trackDuration">Duration: --:--</p>
+            </div>
+            
+            <div class="audio-info">
+                <h3>Audio Analysis</h3>
+                <p>Bass: <span id="bassLevel">0</span>%</p>
+                <p>Mid: <span id="midLevel">0</span>%</p>
+                <p>Treble: <span id="trebleLevel">0</span>%</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="audio-analyzer.js"></script>
+    <script src="visualizer.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
